@@ -2,28 +2,28 @@
 FROM haskell:9.6 AS builder
 
 RUN apt-get update -qq && \
-  apt-get install -qq -y libpcre3 libpcre3-dev build-essential pkg-config --fix-missing --no-install-recommends && \
+  apt-get install -qq -y libpcre3 libpcre3-dev build-essential pkg-config curl git --fix-missing --no-install-recommends && \
   apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 WORKDIR /duckling
 COPY . .
 
-ENV LANG=C.UTF-8
-ENV STACK_SYSTEM_GHC=true
+# Pre-cargar snapshot de Stack (evita descarga gigante en Railway)
+RUN mkdir -p ~/.stack && echo "system-ghc: true" > ~/.stack/config.yaml && \
+    stack update && \
+    stack build --only-dependencies
 
-RUN stack setup && stack install
+# Compilar el binario
+RUN stack install --system-ghc
 
-# ---- Imagen final (runtime) ----
+# ---- Imagen final ----
 FROM debian:bookworm-slim
-
-ENV LANG C.UTF-8
 
 RUN apt-get update -qq && \
   apt-get install -qq -y libpcre3 libgmp10 --no-install-recommends && \
   apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 COPY --from=builder /root/.local/bin/duckling-example-exe /usr/local/bin/
-
 EXPOSE 8000
 CMD ["duckling-example-exe", "-p", "8000"]
 
